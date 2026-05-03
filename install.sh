@@ -85,9 +85,11 @@ else
         autoconnect no >/dev/null
 
     nmcli connection modify "$VPN_PROFILE" \
-        vpn.data "server-name = $VPN_SERVER, user-name = $VPN_USER, login-type = vpn, tunnel-type = $VPN_TUNNEL, if-name = $VPN_IFNAME, password-flags = 2" \
+        vpn.user-name "$VPN_USER" \
+        vpn.data "server-name = $VPN_SERVER, login-type = vpn, tunnel-type = $VPN_TUNNEL, if-name = $VPN_IFNAME, password-flags = 2" \
         ipv4.method auto \
         ipv4.never-default true \
+        ipv4.routes "${VPN_ROUTES:-150.254.0.0/16, 10.0.0.0/8, 62.3.161.0/24, 62.3.164.0/24, 172.29.0.0/16, 192.168.100.0/24}" \
         ipv6.method auto \
         connection.permissions "${INVOKER:+user:$INVOKER}"
 

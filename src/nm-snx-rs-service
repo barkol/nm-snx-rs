@@ -161,11 +161,16 @@ class SnxRsPlugin(dbus.service.Object):
                 log.info("already starting/started — ignoring duplicate Connect")
                 return
 
-            data    = dict(connection.get("vpn", {}).get("data", {}))
-            secrets = dict(connection.get("vpn", {}).get("secrets", {}))
+            vpn     = dict(connection.get("vpn", {}))
+            data    = dict(vpn.get("data", {}))
+            secrets = dict(vpn.get("secrets", {}))
 
+            # NM stores user-name as a top-level vpn property (vpn.user-name),
+            # not inside vpn.data — it's filtered out of vpn.data on save.
+            # Fall back to data["user-name"] in case the caller stuffed it there.
             server     = str(data.get("server-name", "")).strip()
-            user       = str(data.get("user-name", "")).strip()
+            user       = (str(vpn.get("user-name", "")).strip()
+                          or str(data.get("user-name", "")).strip())
             tunnel     = str(data.get("tunnel-type", "ipsec")).strip() or "ipsec"
             login_type = str(data.get("login-type", "vpn")).strip() or "vpn"
             ifname     = (str(data.get("if-name", "")).strip() or DEFAULT_IFACE)

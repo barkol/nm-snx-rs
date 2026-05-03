@@ -5,8 +5,8 @@ autoconnect=false
 
 [vpn]
 service-type=org.freedesktop.NetworkManager.snx-rs
-server-name=oivpn.amu.edu.pl
 user-name=bark@amu.edu.pl
+server-name=oivpn.amu.edu.pl
 login-type=vpn
 tunnel-type=ipsec
 if-name=snx-xfrm
@@ -15,6 +15,13 @@ password-flags=2
 [ipv4]
 method=auto
 never-default=true
+# AMU split-tunnel routes (only AMU subnets go through the VPN)
+route1=150.254.0.0/16
+route2=10.0.0.0/8
+route3=62.3.161.0/24
+route4=62.3.164.0/24
+route5=172.29.0.0/16
+route6=192.168.100.0/24
 
 [ipv6]
 method=auto
