@@ -27,11 +27,16 @@ bar "C. Wszystkie interfejsy TUN/XFRM/SNX"
 ip -o link show 2>&1 | grep -iE 'tun|xfrm|snx' || echo "  (brak)"
 
 bar "D. Adresy IPv4 na tych interfejsach"
-for IF in $(ip -o link show 2>/dev/null | awk -F': ' '/tun|xfrm|snx/{print $2}' | cut -d@ -f1); do
-    echo "  ── $IF ──"
-    ip -4 -o addr show dev "$IF" 2>&1 | sed 's/^/    /' || true
-done
-[[ -z "$IF" ]] && echo "  (brak)"
+mapfile -t _ifs < <(ip -o link show 2>/dev/null \
+    | awk -F': ' '/tun|xfrm|snx/{print $2}' | cut -d@ -f1)
+if (( ${#_ifs[@]} == 0 )); then
+    echo "  (brak)"
+else
+    for IF in "${_ifs[@]}"; do
+        echo "  ── $IF ──"
+        ip -4 -o addr show dev "$IF" 2>&1 | sed 's/^/    /' || true
+    done
+fi
 
 bar "E. Trasy w głównej tablicy"
 ip route 2>&1
