@@ -18,11 +18,13 @@ PROFILE="${VPN_PROFILE:-VPN_AMU_snx}"
 
 # ── 1. Czyszczenie ──────────────────────────────────────────────────────────
 echo "==> 1. Sprzątam wcześniejsze zawieszone procesy / połączenia"
-pkill -INT -f "nmcli.*${PROFILE}"        2>/dev/null || true
-pkill -TERM -f "nm-snx-rs-service"       2>/dev/null || true
+# Używamy -x (exact name) tam gdzie się da, żeby NIE złapać samego skryptu
+# (jego ścieżka /home/.../nm-snx-rs/test-... zawiera "snx-rs").
+pkill -INT -f "nmcli .*${PROFILE}$"      2>/dev/null || true
+sudo pkill -TERM -f "/usr/libexec/nm-snx-rs-service" 2>/dev/null || true
 sleep 1
 nmcli connection down "${PROFILE}"        2>/dev/null || true
-sudo pkill -TERM -f "snx-rs"             2>/dev/null || true
+sudo pkill -x -TERM snx-rs                2>/dev/null || true
 sleep 1
 echo "    aktualne procesy snx-rs:"
 pgrep -af snx-rs 2>&1 | sed 's/^/      /' || echo "      (brak)"
