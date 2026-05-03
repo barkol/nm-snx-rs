@@ -74,12 +74,15 @@ def get_interface_ip(name):
 class SnxRsPlugin(dbus.service.Object):
     def __init__(self, bus, path, mainloop):
         super().__init__(bus, path)
-        self.mainloop  = mainloop
-        self.state     = S_INIT
-        self.snx_proc  = None
-        self.cfg_path  = None
-        self.iface     = DEFAULT_IFACE
-        self.lock      = threading.Lock()
+        self.mainloop   = mainloop
+        self.state      = S_INIT
+        self.snx_proc   = None
+        self.cfg_path   = None
+        self.iface      = DEFAULT_IFACE
+        self.server     = ""
+        self.lock       = threading.Lock()
+        self.supervisor = None
+        self._stop_supervisor = threading.Event()
         # If snx-rs.service is left running it would fight us for the tunnel.
         # Stop (not disable; user can re-enable for CLI-only use) on first start.
         self._stop_system_service()
@@ -169,6 +172,7 @@ class SnxRsPlugin(dbus.service.Object):
             # not inside vpn.data — it's filtered out of vpn.data on save.
             # Fall back to data["user-name"] in case the caller stuffed it there.
             server     = str(data.get("server-name", "")).strip()
+            self.server = server
             user       = (str(vpn.get("user-name", "")).strip()
                           or str(data.get("user-name", "")).strip())
             tunnel     = str(data.get("tunnel-type", "ipsec")).strip() or "ipsec"
@@ -236,12 +240,39 @@ class SnxRsPlugin(dbus.service.Object):
                     log.info("interface %s up: %s/%d", self.iface, *ip_info)
                     self._send_config(*ip_info)
                     self._set_state(S_STARTED)
+                    self._start_supervisor()
                     return
                 time.sleep(1)
 
             log.error("timeout waiting for %s", self.iface)
             self._emit_failure(F_CONNECT_FAILED)
             self._do_disconnect(quit_after=True)
+
+    def _start_supervisor(self):
+        """Background watcher: if snx-rs dies or the tunnel interface
+        disappears while we think we're STARTED, tell NM cleanly so it
+        moves to disconnected state instead of waiting on a dead tunnel."""
+        self._stop_supervisor.clear()
+        self.supervisor = threading.Thread(target=self._supervise, daemon=True)
+        self.supervisor.start()
+
+    def _supervise(self):
+        log.info("supervisor started")
+        while not self._stop_supervisor.wait(5):
+            if self.state != S_STARTED:
+                break
+            if self.snx_proc and self.snx_proc.poll() is not None:
+                log.error("snx-rs subprocess died (rc=%s) — failing tunnel",
+                          self.snx_proc.returncode)
+                self._emit_failure(F_CONNECT_FAILED)
+                self._do_disconnect(quit_after=True)
+                return
+            if get_interface_ip(self.iface) is None:
+                log.error("interface %s disappeared — failing tunnel", self.iface)
+                self._emit_failure(F_CONNECT_FAILED)
+                self._do_disconnect(quit_after=True)
+                return
+        log.info("supervisor exiting")
 
     def _drain_output(self):
         if not self.snx_proc:
@@ -253,7 +284,25 @@ class SnxRsPlugin(dbus.service.Object):
             pass
 
     def _send_config(self, ip, prefix):
-        cfg = dbus.Dictionary({"tundev": dbus.String(self.iface)}, signature="sv")
+        # Resolve gateway IP so NM knows to route packets to the gateway via
+        # the underlying interface (not into the tunnel).
+        gw_int = 0
+        try:
+            gw_ip = socket.gethostbyname(self.server)
+            gw_int = ip_to_uint32(gw_ip)
+        except Exception as e:
+            log.warning("could not resolve gateway %s: %s", self.server, e)
+
+        # has-ip4=true is REQUIRED — without it NM doesn't wait for the
+        # Ip4Config signal and just times out at 60 s.
+        cfg = dbus.Dictionary({
+            "tundev":   dbus.String(self.iface),
+            "gateway":  dbus.UInt32(gw_int),
+            "mtu":      dbus.UInt32(1350),
+            "has-ip4":  dbus.Boolean(True),
+            "has-ip6":  dbus.Boolean(False),
+            "can-persist": dbus.Boolean(False),
+        }, signature="sv")
         ip4 = dbus.Dictionary({
             "tundev":  dbus.String(self.iface),
             "address": dbus.UInt32(ip_to_uint32(ip)),
@@ -278,6 +327,7 @@ class SnxRsPlugin(dbus.service.Object):
             return
 
         self._set_state(S_STOPPING)
+        self._stop_supervisor.set()
 
         if self.snx_proc and self.snx_proc.poll() is None:
             log.info("terminating snx-rs (pid %d)", self.snx_proc.pid)
