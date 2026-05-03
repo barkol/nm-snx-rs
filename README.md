@@ -35,9 +35,7 @@ nm-snx-rs/
 ├── uninstall.sh
 ├── save-password.sh                               # Switch profile to silent activation
 ├── diag.sh                                        # One-shot diagnostic dump
-├── diagnose-60s-drop.sh                           # Capture activation cycle with NM at DEBUG
-├── fix-selinux-execmem.sh                         # Grant NetworkManager_t the execmem dbus-python needs
-└── test-with-saved-password.sh                    # Bypass agent path; embed password and test
+└── fix-selinux-execmem.sh                         # Grant NetworkManager_t the execmem dbus-python needs
 ```
 
 ## Requirements
@@ -192,8 +190,6 @@ manages the connection logically without managing the kernel device.
 
 ```
 bash diag.sh                          # whole-system snapshot
-bash diagnose-60s-drop.sh             # captures full activation cycle at NM DEBUG
-bash test-with-saved-password.sh      # bypasses agent; tests plugin in isolation
 sudo journalctl -t nm-snx-rs -f       # live plugin log
 sudo journalctl -t NetworkManager --since '5 minutes ago' | grep -iE 'vpn|snx'
 ```
