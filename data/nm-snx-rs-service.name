@@ -4,6 +4,6 @@ service=org.freedesktop.NetworkManager.snx-rs
 program=/usr/libexec/nm-snx-rs-service
 
 [GNOME]
-auth-dialog=
-properties=
-supports-external-ui-mode=false
+auth-dialog=/usr/libexec/nm-snx-rs-auth-dialog
+supports-external-ui-mode=true
+supports-hints=true

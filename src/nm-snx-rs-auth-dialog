@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""
+nm-snx-rs-auth-dialog — auth-dialog companion for nm-snx-rs.
+
+NetworkManager's secret agent in gnome-shell (and nm-applet) calls a per-VPN
+auth-dialog binary to figure out which secrets a connection needs. Without
+one, GNOME silently skips prompting for our VPN type and the connection just
+times out.
+
+This script implements the --external-ui-mode protocol used by gnome-shell:
+read the connection's vpn.data + existing vpn.secrets from stdin in the
+DATA_KEY / DATA_VAL / SECRET_KEY / SECRET_VAL form, then print a GKeyFile
+description of the secret(s) to ask for, then wait for "QUIT" on stdin.
+GNOME renders its own dialog from that description and writes the result
+back into the connection's secrets.
+"""
+
+import sys
+
+
+def parse_argv():
+    args = {
+        "uuid": "", "name": "", "service": "",
+        "external_ui_mode": False,
+        "allow_interaction": False,
+        "reprompt": False,
+    }
+    i = 1
+    while i < len(sys.argv):
+        a = sys.argv[i]
+        if a in ("-u", "--uuid") and i + 1 < len(sys.argv):
+            args["uuid"] = sys.argv[i + 1]; i += 2; continue
+        if a in ("-n", "--name") and i + 1 < len(sys.argv):
+            args["name"] = sys.argv[i + 1]; i += 2; continue
+        if a in ("-s", "--service") and i + 1 < len(sys.argv):
+            args["service"] = sys.argv[i + 1]; i += 2; continue
+        if a == "--external-ui-mode":
+            args["external_ui_mode"] = True
+        elif a == "--allow-interaction":
+            args["allow_interaction"] = True
+        elif a == "--reprompt":
+            args["reprompt"] = True
+        elif a.startswith("--uuid="):
+            args["uuid"] = a.split("=", 1)[1]
+        elif a.startswith("--name="):
+            args["name"] = a.split("=", 1)[1]
+        elif a.startswith("--service="):
+            args["service"] = a.split("=", 1)[1]
+        i += 1
+    return args
+
+
+def parse_stdin():
+    """Returns (data_dict, secrets_dict). Reads until 'DONE'."""
+    data, secrets = {}, {}
+    pending_key, pending_section = None, None
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        line = line.rstrip("\n")
+        if line == "DONE":
+            break
+        if line == "":
+            pending_key, pending_section = None, None
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        if k == "DATA_KEY":
+            pending_section, pending_key = "data", v
+        elif k == "DATA_VAL":
+            if pending_section == "data" and pending_key is not None:
+                data[pending_key] = v
+            pending_key = None
+        elif k == "SECRET_KEY":
+            pending_section, pending_key = "secret", v
+        elif k == "SECRET_VAL":
+            if pending_section == "secret" and pending_key is not None:
+                secrets[pending_key] = v
+            pending_key = None
+    return data, secrets
+
+
+def main():
+    args = parse_argv()
+    data, secrets = parse_stdin()
+
+    pwd_flags = data.get("password-flags", "0")
+    existing_pwd = secrets.get("password", "")
+    name = args["name"] or "VPN"
+
+    # Should the dialog actually prompt?
+    #   reprompt -> always ask
+    #   password-flags=2 (NOT_SAVED) -> always ask
+    #   password-flags=4 (NOT_REQUIRED) -> never ask
+    #   no existing password -> ask
+    need_ask = (
+        args["reprompt"]
+        or pwd_flags == "2"
+        or (not existing_pwd and pwd_flags != "4")
+    )
+
+    if args["external_ui_mode"]:
+        out = [
+            "[VPN Plugin UI]",
+            "Version=2",
+            f"Description=Authentication required for VPN '{name}'.",
+            "Title=Authenticate VPN",
+            "",
+            "[password]",
+            f"Value={existing_pwd}",
+            "Label=VPN Password:",
+            "IsSecret=true",
+            f"ShouldAsk={'true' if need_ask else 'false'}",
+            "",
+        ]
+        sys.stdout.write("\n".join(out) + "\n")
+        sys.stdout.flush()
+        # Wait for QUIT before exiting (NM agent contract).
+        while True:
+            line = sys.stdin.readline()
+            if not line or line.strip() == "QUIT":
+                break
+        return 0
+
+    # Legacy protocol: print "secret_name\nsecret_value\n..." for what we have.
+    if existing_pwd:
+        sys.stdout.write("password\n")
+        sys.stdout.write(existing_pwd + "\n")
+        sys.stdout.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

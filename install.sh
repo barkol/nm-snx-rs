@@ -19,6 +19,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── install paths ────────────────────────────────────────────────────────────
 LIBEXEC=/usr/libexec/nm-snx-rs-service
+AUTH_DIALOG=/usr/libexec/nm-snx-rs-auth-dialog
 NAME_FILE=/usr/lib/NetworkManager/VPN/nm-snx-rs-service.name
 DBUS_POLICY=/etc/dbus-1/system.d/org.freedesktop.NetworkManager.snx-rs.conf
 
@@ -41,7 +42,8 @@ python3 -c 'import dbus, dbus.service, dbus.mainloop.glib; from gi.repository im
 
 # ── 2. Install plugin files ──────────────────────────────────────────────────
 echo "==> 2. Installing plugin files"
-install -o root -g root -m 0755 "$REPO_DIR/src/nm-snx-rs-service" "$LIBEXEC"
+install -o root -g root -m 0755 "$REPO_DIR/src/nm-snx-rs-service"     "$LIBEXEC"
+install -o root -g root -m 0755 "$REPO_DIR/src/nm-snx-rs-auth-dialog" "$AUTH_DIALOG"
 install -d -o root -g root -m 0755 /usr/lib/NetworkManager/VPN
 install -o root -g root -m 0644 "$REPO_DIR/data/nm-snx-rs-service.name" "$NAME_FILE"
 install -o root -g root -m 0644 "$REPO_DIR/data/org.freedesktop.NetworkManager.snx-rs.conf" "$DBUS_POLICY"

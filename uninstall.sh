@@ -15,11 +15,12 @@ fi
 VPN_PROFILE="${VPN_PROFILE:-VPN_AMU_snx}"
 
 LIBEXEC=/usr/libexec/nm-snx-rs-service
+AUTH_DIALOG=/usr/libexec/nm-snx-rs-auth-dialog
 NAME_FILE=/usr/lib/NetworkManager/VPN/nm-snx-rs-service.name
 DBUS_POLICY=/etc/dbus-1/system.d/org.freedesktop.NetworkManager.snx-rs.conf
 
 echo "==> Removing plugin files"
-rm -fv "$LIBEXEC" "$NAME_FILE" "$DBUS_POLICY"
+rm -fv "$LIBEXEC" "$AUTH_DIALOG" "$NAME_FILE" "$DBUS_POLICY"
 
 echo "==> Reloading dbus / NetworkManager"
 systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null || true
