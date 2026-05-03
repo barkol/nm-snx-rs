@@ -1,0 +1,9 @@
+[VPN Connection]
+name=snx-rs
+service=org.freedesktop.NetworkManager.snx-rs
+program=/usr/libexec/nm-snx-rs-service
+
+[GNOME]
+auth-dialog=
+properties=
+supports-external-ui-mode=false
