@@ -75,25 +75,41 @@ if [[ "${SKIP_PROFILE:-0}" -eq 1 ]]; then
 else
     echo "==> 4. Creating NM VPN profile: $VPN_PROFILE  (server=$VPN_SERVER user=$VPN_USER)"
 
+    # Preserve existing password-flags if the user previously ran
+    # save-password.sh and chose 0 (saved). Default to 2 (always-ask) for
+    # fresh installs.
+    EXISTING_FLAGS=$(nmcli -t -f vpn.data connection show "$VPN_PROFILE" 2>/dev/null \
+        | sed -nE 's/.*password-flags = ([0-9]+).*/\1/p')
+    PWD_FLAGS="${EXISTING_FLAGS:-2}"
+
     if nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$VPN_PROFILE"; then
-        nmcli connection delete "$VPN_PROFILE" >/dev/null
+        # Preserve secrets across the recreate by exporting and re-importing
+        # them, but simpler: just keep the existing connection and update its
+        # fields in place.
+        nmcli connection modify "$VPN_PROFILE" \
+            vpn.user-name "$VPN_USER" \
+            vpn.data "server-name = $VPN_SERVER, login-type = vpn, tunnel-type = $VPN_TUNNEL, if-name = $VPN_IFNAME, password-flags = $PWD_FLAGS" \
+            ipv4.method auto \
+            ipv4.never-default true \
+            ipv4.routes "${VPN_ROUTES:-150.254.0.0/16, 10.0.0.0/8, 62.3.161.0/24, 62.3.164.0/24, 172.29.0.0/16, 192.168.100.0/24}" \
+            ipv6.method auto \
+            connection.permissions "${INVOKER:+user:$INVOKER}"
+    else
+        nmcli connection add \
+            type vpn \
+            con-name "$VPN_PROFILE" \
+            vpn-type org.freedesktop.NetworkManager.snx-rs \
+            ifname "--" \
+            autoconnect no >/dev/null
+        nmcli connection modify "$VPN_PROFILE" \
+            vpn.user-name "$VPN_USER" \
+            vpn.data "server-name = $VPN_SERVER, login-type = vpn, tunnel-type = $VPN_TUNNEL, if-name = $VPN_IFNAME, password-flags = $PWD_FLAGS" \
+            ipv4.method auto \
+            ipv4.never-default true \
+            ipv4.routes "${VPN_ROUTES:-150.254.0.0/16, 10.0.0.0/8, 62.3.161.0/24, 62.3.164.0/24, 172.29.0.0/16, 192.168.100.0/24}" \
+            ipv6.method auto \
+            connection.permissions "${INVOKER:+user:$INVOKER}"
     fi
-
-    nmcli connection add \
-        type vpn \
-        con-name "$VPN_PROFILE" \
-        vpn-type org.freedesktop.NetworkManager.snx-rs \
-        ifname "--" \
-        autoconnect no >/dev/null
-
-    nmcli connection modify "$VPN_PROFILE" \
-        vpn.user-name "$VPN_USER" \
-        vpn.data "server-name = $VPN_SERVER, login-type = vpn, tunnel-type = $VPN_TUNNEL, if-name = $VPN_IFNAME, password-flags = 2" \
-        ipv4.method auto \
-        ipv4.never-default true \
-        ipv4.routes "${VPN_ROUTES:-150.254.0.0/16, 10.0.0.0/8, 62.3.161.0/24, 62.3.164.0/24, 172.29.0.0/16, 192.168.100.0/24}" \
-        ipv6.method auto \
-        connection.permissions "${INVOKER:+user:$INVOKER}"
 
     echo "    profile saved:"
     nmcli -f connection.id,connection.type,vpn.service-type,vpn.data \
