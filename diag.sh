@@ -63,8 +63,16 @@ echo "Pytam o hasło sudo dla journalctl..."
 sudo -p "[sudo] hasło: " bash -s <<EOF
 echo
 echo '── J. Log wtyczki nm-snx-rs (ostatnie ${MINUTES} min) ──'
-journalctl -t nm-snx-rs --since '${SINCE}' --no-pager 2>/dev/null | tail -60 \
-    || echo '  (brak logów)'
+# Try the proper SYSLOG_IDENTIFIER tag first; fall back to grep on the raw
+# journal for older plugin builds that just printed to stderr (which lands
+# under whatever tag the python interpreter inherited).
+{
+    journalctl -t nm-snx-rs --since '${SINCE}' --no-pager 2>/dev/null
+    journalctl _COMM=python3 --since '${SINCE}' --no-pager 2>/dev/null \
+        | grep -iE 'nm-snx-rs|snx-rs|do_connect|Disconnect|SecretsRequired'
+} | tail -60
+[[ -z "\$(journalctl -t nm-snx-rs --since '${SINCE}' --no-pager 2>/dev/null)\$(journalctl _COMM=python3 --since '${SINCE}' --no-pager 2>/dev/null | grep -iE 'nm-snx-rs')" ]] \
+    && echo '  (brak logów wtyczki — być może wtyczka nie wystartowała)'
 
 echo
 echo '── K. Log NetworkManagera dla VPN (ostatnie ${MINUTES} min) ──'

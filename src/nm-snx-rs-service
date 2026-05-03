@@ -308,12 +308,25 @@ class SnxRsPlugin(dbus.service.Object):
         return False
 
 
+def _setup_logging():
+    """Log to systemd journal with SYSLOG_IDENTIFIER=nm-snx-rs so
+    `journalctl -t nm-snx-rs` finds us. Falls back to stderr if the
+    systemd python bindings aren't installed."""
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    try:
+        from systemd.journal import JournalHandler
+        h = JournalHandler(SYSLOG_IDENTIFIER="nm-snx-rs")
+        h.setFormatter(logging.Formatter("%(message)s"))
+    except ImportError:
+        h = logging.StreamHandler(sys.stderr)
+        h.setFormatter(logging.Formatter(
+            "nm-snx-rs[%(process)d]: %(message)s"))
+    root.addHandler(h)
+
+
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s[%(process)d]: %(message)s",
-        stream=sys.stderr,
-    )
+    _setup_logging()
     log.info("starting (pid %d)", os.getpid())
 
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
