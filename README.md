@@ -80,6 +80,29 @@ ip -4 addr show snx-xfrm                 # see the assigned address
 sudo journalctl -t nm-snx-rs -f          # live plugin logs
 ```
 
+## Known issue: GNOME 48 Quick Settings tile doesn't prompt for password
+
+GNOME Shell 48's Quick Settings VPN tile (top‑right panel) has a partial
+secret‑agent implementation and does not always invoke this plugin's
+auth‑dialog. Symptoms:
+
+- Click the VPN toggle in Quick Settings → nothing happens, no dialog.
+- Open **Settings → Network → VPN_AMU_snx → toggle on** → the password
+  dialog appears and the connection works.
+
+Two fixes:
+
+1. **Use Settings → Network instead of Quick Settings.** Annoying but works.
+2. **Save the password into the connection** (one time):
+   ```
+   bash ~/git/nm-snx-rs/save-password.sh
+   ```
+   After this, both Quick Settings and Settings → Network activate the
+   connection silently with no dialog. The password is stored in
+   `/etc/NetworkManager/system-connections/VPN_AMU_snx.nmconnection`
+   (mode 0600, root‑only) just like any other `password-flags=0` NM
+   secret. Revert any time with the commands the script prints.
+
 ## Configuring a different gateway
 
 The connection profile carries everything snx-rs needs in `vpn.data`:
