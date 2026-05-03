@@ -118,8 +118,16 @@ def main():
         ]
         sys.stdout.write("\n".join(out) + "\n")
         sys.stdout.flush()
-        # Wait for QUIT before exiting (NM agent contract).
-        while True:
+        # Wait for QUIT or EOF before exiting (NM agent contract). Bail out
+        # after 5 minutes regardless so we never become a zombie process if
+        # the agent forgets to close the pipe.
+        import select
+        deadline = 300  # seconds
+        while deadline > 0:
+            ready, _, _ = select.select([sys.stdin], [], [], min(deadline, 5))
+            if not ready:
+                deadline -= 5
+                continue
             line = sys.stdin.readline()
             if not line or line.strip() == "QUIT":
                 break
