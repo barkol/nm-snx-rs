@@ -198,20 +198,24 @@ class SnxRsPlugin(dbus.service.Object):
             self._stop_system_service()
 
             # Per-connection ephemeral config in /run (tmpfs, root-owned 600).
+            # Password lives inside the config file (also mode 0600) instead of
+            # being passed via -p on argv, where it would be visible in ps and
+            # in /proc/<pid>/cmdline.
             fd, self.cfg_path = tempfile.mkstemp(prefix="nm-snx-rs-", suffix=".conf", dir="/run")
             os.close(fd)
             os.chmod(self.cfg_path, 0o600)
+            pw_b64 = base64.b64encode(password.encode("utf-8")).decode("ascii")
             with open(self.cfg_path, "w") as f:
                 f.write(f"server-name = {server}\n")
                 f.write(f"user-name = {user}\n")
                 f.write(f"login-type = {login_type}\n")
                 f.write(f"tunnel-type = {tunnel}\n")
                 f.write(f"if-name = {ifname}\n")
+                f.write(f"password = {pw_b64}\n")
                 f.write("keychain = false\n")
                 f.write("log-level = info\n")
 
-            pw_b64 = base64.b64encode(password.encode("utf-8")).decode("ascii")
-            argv = [SNX_RS, "-c", self.cfg_path, "-p", pw_b64, "-m", "standalone"]
+            argv = [SNX_RS, "-c", self.cfg_path, "-m", "standalone"]
             log.info("spawning snx-rs (config=%s)", self.cfg_path)
             try:
                 self.snx_proc = subprocess.Popen(
